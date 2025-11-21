@@ -93,6 +93,14 @@ pip install -e .
 bash examples/qwen2_5_vl_7b_geo3k_grpo.sh
 ```
 
+### DeepSeek-OCR GRPO Quickstart
+
+The DeepSeek-OCR pipeline relies on `transformers>=4.44.2` and `vllm>=0.11.0` (bundled in the provided Docker image). Run the following command to launch GRPO on DocVQA-style data with the OCR-specific reward and prompt template:
+
+```bash
+bash examples/deepseek_ocr_grpo.sh
+```
+
 ### Merge Checkpoint in Hugging Face Format
 
 ```bash

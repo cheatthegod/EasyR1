@@ -31,10 +31,12 @@ SUPPORTED_MODEL_TYPE = (
     "qwen2_5_vl",
     "qwen3_vl",
     "qwen3_vl_moe",
+    "deepseek-ocr",
 )
 
 QWEN2_VL_MODELS = ("qwen2_vl", "qwen2_5_vl")
 QWEN3_VL_MODELS = ("qwen3_vl", "qwen3_vl_moe")
+DEEPSEEK_OCR_MODELS = ("deepseek-ocr",)
 
 
 def apply_ulysses_patch(model_type: str) -> None:
@@ -76,3 +78,13 @@ def apply_ulysses_patch(model_type: str) -> None:
         # TODO: add linear cross entropy kernels
         Qwen3VLForConditionalGeneration.forward = qwen3_vl_model_forward
         Qwen3VLMoeForConditionalGeneration.forward = qwen3_vl_model_forward
+    elif model_type in DEEPSEEK_OCR_MODELS:
+        from transformers.models.deepseek_ocr.modeling_deepseek_ocr import (
+            DeepseekOcrForConditionalGeneration,
+            DeepseekOcrModel,
+        )
+
+        from .transformers.deepseek_ocr import deepseek_ocr_base_forward, deepseek_ocr_model_forward
+
+        DeepseekOcrModel.forward = deepseek_ocr_base_forward
+        DeepseekOcrForConditionalGeneration.forward = deepseek_ocr_model_forward

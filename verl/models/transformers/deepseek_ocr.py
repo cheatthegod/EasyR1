@@ -171,6 +171,10 @@ def deepseek_ocr_base_forward(
         elif position_ids.ndim != 3 or position_ids.size(0) not in (3, 4):
             raise ValueError("position_ids should be a 3D tensor of shape (3|4, batch_size, seq_length).")
 
+        if position_ids.device != input_ids.device:
+            position_ids = position_ids.to(input_ids.device)
+            kwargs["position_ids"] = position_ids
+
     input_kwargs = _get_input_embeds(self, input_ids, attention_mask, pixel_values, image_grid_thw)
     kwargs.update(input_kwargs)
     outputs = self.language_model(input_ids=None, **kwargs)

@@ -40,18 +40,39 @@ def _repeat_interleave(value: Union[torch.Tensor, np.ndarray], repeats: int) -> 
 
 
 def _get_logit_bias(processor: Optional[ProcessorMixin]) -> Optional[dict[int, float]]:
-    # enforce vllm to not output image token
+    # enforce vllm to not output image or vision special tokens
     # TODO: add video token
-    if processor is not None and hasattr(processor, "image_token"):
-        image_token_id = processor.tokenizer.convert_tokens_to_ids(processor.image_token)
-        return {image_token_id: -100}
-    else:
+    if processor is None:
         return None
+
+    tokenizer = getattr(processor, "tokenizer", None)
+    if tokenizer is None:
+        return None
+
+    logit_bias: dict[int, float] = {}
+
+    def _add_token(token: Optional[str]):
+        if token is None:
+            return
+        token_id = tokenizer.convert_tokens_to_ids(token)
+        if token_id is not None:
+            logit_bias[token_id] = -100
+
+    image_token_id = getattr(processor, "image_token_id", None)
+    if image_token_id is None and hasattr(processor, "image_token"):
+        _add_token(getattr(processor, "image_token"))
+    elif image_token_id is not None:
+        logit_bias[image_token_id] = -100
+
+    _add_token(getattr(processor, "vision_start_token", None))
+    _add_token(getattr(processor, "vision_end_token", None))
+
+    return logit_bias or None
 
 
 def _process_multi_modal_data(
     multi_modal_data: dict[str, Any], min_pixels: int, max_pixels: int, video_fps: float
-) -> dict[str, Any]:
+) -> Optional[dict[str, Any]]:
     # may convert image path to image object
     images, videos = [], []
     if "images" in multi_modal_data:
@@ -62,8 +83,15 @@ def _process_multi_modal_data(
         for video in multi_modal_data["videos"]:
             videos.append(process_video(video, min_pixels, max_pixels, video_fps))
 
+    image_grid_thw = multi_modal_data.get("image_grid_thw")
+    if hasattr(image_grid_thw, "tolist"):
+        image_grid_thw = image_grid_thw.tolist()
+
     if len(images) != 0:
-        return {"image": images}
+        payload = {"image": images}
+        if image_grid_thw is not None:
+            payload["image_grid_thw"] = image_grid_thw
+        return payload
 
     if len(videos) != 0:
         return {"video": videos}

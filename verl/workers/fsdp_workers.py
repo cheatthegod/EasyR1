@@ -190,19 +190,30 @@ class FSDPWorker(Worker):
         else:
             torch_dtype = PrecisionType.to_dtype(fsdp_config.torch_dtype)
 
+        model_type = getattr(self.model_config, "model_type", None)
         if role == "critic":
             AutoClass = AutoModelForTokenClassification
+        elif model_type == "deepseek-ocr":
+            from transformers.models.deepseek_ocr.modeling_deepseek_ocr import DeepseekOcrForConditionalGeneration
+
+            AutoClass = DeepseekOcrForConditionalGeneration
         elif type(self.model_config) in AutoModelForImageTextToText._model_mapping.keys():
             AutoClass = AutoModelForImageTextToText
         else:
             AutoClass = AutoModelForCausalLM
+
+        attn_implementation = "flash_attention_2"
+        if model_type == "deepseek-ocr":
+            attn_implementation = "sdpa"
+            if torch_dtype == torch.bfloat16:
+                torch_dtype = torch.float16
 
         if (not fsdp_config.enable_rank0_init) or self.device_mesh.get_local_rank("fsdp") == 0:
             model = AutoClass.from_pretrained(
                 model_config.model_path,
                 config=self.model_config,
                 torch_dtype=torch_dtype,
-                attn_implementation="flash_attention_2",
+                attn_implementation=attn_implementation,
                 device_map="cpu" if fsdp_config.enable_rank0_init else "cuda",
                 low_cpu_mem_usage=True,
                 trust_remote_code=model_config.trust_remote_code,
@@ -212,7 +223,7 @@ class FSDPWorker(Worker):
                 model = AutoClass.from_config(
                     self.model_config,
                     torch_dtype=torch_dtype,
-                    attn_implementation="flash_attention_2",
+                    attn_implementation=attn_implementation,
                     trust_remote_code=model_config.trust_remote_code,
                 )
 

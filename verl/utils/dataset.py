@@ -27,6 +27,7 @@ from PIL.Image import Image as ImageObject
 from qwen_vl_utils.vision_process import fetch_video
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer, ProcessorMixin
+from transformers.models.deepseek_ocr.processing_deepseek_ocr import DeepseekOcrProcessor
 
 from . import torch_functional as VF
 
@@ -229,10 +230,17 @@ class RLHFDataset(Dataset):
             for image in images:
                 processed_images.append(process_image(image, self.min_pixels, self.max_pixels))
 
-            model_inputs = self.processor(processed_images, [prompt], add_special_tokens=False, return_tensors="pt")
+            model_inputs = self.processor(
+                images=processed_images,
+                text=[prompt],
+                add_special_tokens=False,
+                return_tensors="pt",
+            )
             input_ids = model_inputs.pop("input_ids")[0]
             attention_mask = model_inputs.pop("attention_mask")[0]
-            example["multi_modal_data"] = {"images": images}
+            example["multi_modal_data"] = {"images": processed_images}
+            if "image_grid_thw" in model_inputs:
+                example["multi_modal_data"]["image_grid_thw"] = model_inputs.get("image_grid_thw")
         elif self.video_key in example:
             prompt = self.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
             videos = example.pop(self.video_key)
@@ -280,6 +288,15 @@ class RLHFDataset(Dataset):
             )  # (3, seq_length)
             text_position_ids = torch.arange(len(input_ids)).unsqueeze(0)  # (1, seq_length)
             position_ids = torch.cat((text_position_ids, vision_position_ids), dim=0)  # (4, seq_length)
+        elif isinstance(self.processor, DeepseekOcrProcessor):
+            from ..models.transformers.deepseek_ocr import get_rope_index
+
+            position_ids = get_rope_index(
+                self.processor,
+                input_ids=input_ids,
+                image_grid_thw=model_inputs.get("image_grid_thw", None),
+                attention_mask=attention_mask,
+            )
         else:
             position_ids = torch.clip(attention_mask.cumsum(dim=0) - 1, min=0, max=None)  # (seq_length,)
 

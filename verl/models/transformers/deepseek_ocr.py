@@ -163,7 +163,12 @@ def deepseek_ocr_base_forward(
 ):
     position_ids = kwargs.get("position_ids")
     if isinstance(position_ids, torch.Tensor):
-        if position_ids.ndim != 3 or position_ids.size(0) not in (3, 4):
+        if position_ids.ndim == 3 and position_ids.size(0) not in (3, 4) and position_ids.size(1) in (3, 4):
+            # Accept batch-first position ids from the dataloader and transpose to
+            # the (3|4, batch_size, seq_length) shape expected by the model.
+            position_ids = position_ids.transpose(0, 1).contiguous()
+            kwargs["position_ids"] = position_ids
+        elif position_ids.ndim != 3 or position_ids.size(0) not in (3, 4):
             raise ValueError("position_ids should be a 3D tensor of shape (3|4, batch_size, seq_length).")
 
     input_kwargs = _get_input_embeds(self, input_ids, attention_mask, pixel_values, image_grid_thw)
